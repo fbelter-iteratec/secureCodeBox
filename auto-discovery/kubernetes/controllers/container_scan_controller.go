@@ -112,8 +112,8 @@ func (r *ContainerScanReconciler) checkIfNewScansNeedToBeCreated(ctx context.Con
 	r.createScheduledScans(ctx, pod, nonScannedImageIDs)
 }
 
-func (r *ContainerScanReconciler) getNonScannedImageIDs(ctx context.Context, pod corev1.Pod) map[string]configv1.ScanConfig {
-	result := make(map[string]configv1.ScanConfig)
+func (r *ContainerScanReconciler) getNonScannedImageIDs(ctx context.Context, pod corev1.Pod) map[string][]configv1.ScanConfig {
+	result := make(map[string][]configv1.ScanConfig)
 	allImageIDs := getImageIDsForPod(pod)
 
 	for _, imageID := range allImageIDs {
@@ -126,7 +126,7 @@ func (r *ContainerScanReconciler) getNonScannedImageIDs(ctx context.Context, pod
 			err := r.Client.Get(ctx, types.NamespacedName{Name: scanName, Namespace: pod.Namespace}, &scan)
 
 			if apierrors.IsNotFound(err) {
-				result[cleanedImageID] = scanConfig
+				result[cleanedImageID] = append(result[cleanedImageID], scanConfig)
 			} else if err != nil {
 				r.Log.Error(err, "Unable to fetch scan", "name", scanName, "namespace", pod.Namespace)
 			}
@@ -179,9 +179,11 @@ func getScanName(imageID string, scanConfig configv1.ScanConfig) string {
 	return result[:62]
 }
 
-func (r *ContainerScanReconciler) createScheduledScans(ctx context.Context, pod corev1.Pod, scansToBeCreated map[string]configv1.ScanConfig) {
-	for imageID, scan := range scansToBeCreated {
-		r.createScheduledScan(ctx, pod, imageID, scan)
+func (r *ContainerScanReconciler) createScheduledScans(ctx context.Context, pod corev1.Pod, scansToBeCreated map[string][]configv1.ScanConfig) {
+	for imageID, scans := range scansToBeCreated {
+		for _, scan := range scans {
+			r.createScheduledScan(ctx, pod, imageID, scan)
+		}
 	}
 }
 
@@ -256,8 +258,8 @@ func (r *ContainerScanReconciler) checkIfScansNeedToBeDeleted(ctx context.Contex
 	r.deleteScans(ctx, pod, imageIDsToBeDeleted)
 }
 
-func (r *ContainerScanReconciler) getOrphanedScanImageIDs(ctx context.Context, pod corev1.Pod, imageIDs []string) map[string]configv1.ScanConfig {
-	result := make(map[string]configv1.ScanConfig)
+func (r *ContainerScanReconciler) getOrphanedScanImageIDs(ctx context.Context, pod corev1.Pod, imageIDs []string) map[string][]configv1.ScanConfig {
+	result := make(map[string][]configv1.ScanConfig)
 
 	for _, imageID := range imageIDs {
 		cleanedImageID := cleanupImageID(imageID, r.Log)
@@ -270,7 +272,7 @@ func (r *ContainerScanReconciler) getOrphanedScanImageIDs(ctx context.Context, p
 			if err != nil {
 				r.Log.Error(err, "Unable to fetch scan", "name", scanName)
 			} else if !r.containerIDInUse(ctx, pod, imageID) {
-				result[cleanedImageID] = scanConfig
+				result[cleanedImageID] = append(result[cleanedImageID], scanConfig)
 			}
 		}
 	}
@@ -301,20 +303,23 @@ func searchForImageIDInPods(pods []corev1.Pod, targetImageID string) bool {
 	return false
 }
 
-func (r *ContainerScanReconciler) deleteScans(ctx context.Context, pod corev1.Pod, scansToBeDeleted map[string]configv1.ScanConfig) {
-	for imageID, scanConfig := range scansToBeDeleted {
-		scan, err := r.getScan(ctx, pod, imageID, scanConfig)
+func (r *ContainerScanReconciler) deleteScans(ctx context.Context, pod corev1.Pod, scansToBeDeleted map[string][]configv1.ScanConfig) {
+	for imageID, scanConfigs := range scansToBeDeleted {
+		for _, scanConfig := range scanConfigs {
 
-		if err != nil {
-			r.Log.Error(err, "Unable to fetch scan", "pod", pod, "imageID", imageID)
-			continue
-		}
+			scan, err := r.getScan(ctx, pod, imageID, scanConfig)
 
-		err = r.Client.Delete(ctx, &scan)
-		if err != nil {
-			r.Log.Error(err, "Unable to delete scheduled scan", "scan", scan.Name)
-		} else {
-			r.Log.V(6).Info("Deleting scheduled scan", "scan", scan.Name)
+			if err != nil {
+				r.Log.Error(err, "Unable to fetch scan", "pod", pod, "imageID", imageID)
+				continue
+			}
+
+			err = r.Client.Delete(ctx, &scan)
+			if err != nil {
+				r.Log.Error(err, "Unable to delete scheduled scan", "scan", scan.Name)
+			} else {
+				r.Log.V(6).Info("Deleting scheduled scan", "scan", scan.Name)
+			}
 		}
 	}
 }
