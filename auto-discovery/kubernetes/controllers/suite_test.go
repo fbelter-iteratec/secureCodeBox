@@ -103,6 +103,7 @@ var _ = BeforeSuite(func() {
 			PassiveReconcileInterval: metav1.Duration{Duration: 1 * time.Second},
 			ScanConfigs: []configv1.ScanConfig{
 				{
+					Name:           "test-scan",
 					RepeatInterval: metav1.Duration{Duration: time.Hour},
 					Annotations:    map[string]string{"testAnnotation": "{{ .Namespace.Name }}"},
 					Labels:         map[string]string{"testLabel": "{{ .Namespace.Name }}"},
