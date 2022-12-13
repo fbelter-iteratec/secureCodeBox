@@ -172,3 +172,21 @@ The container autodiscovery will now be enabled by default. Additionally the con
 The format for [Nuclei](https://www.securecodebox.io/docs/scanners/nuclei) have been updated. With it some attributes have been moved / renamed to more closely match the nuclei format and to be able to support most / all information contained from the findings.
 
 ➡️  [Reference: #1350](https://github.com/secureCodeBox/secureCodeBox/pull/1350)
+### Autodiscovery takes a list of scans in config file
+The autodiscovery now takes a list of scans in its configuration. Each configured scan needs a unique name so that the autodiscovery is able to distinguish between scans. Because of this it is possible to configure multiple scans with the same scan type.
+
+Example config:
+```yaml
+    scanConfig:
+      - scanType: trivy-image
+        name: "my-trivy-scan"
+        parameters:
+          - "{{ .ImageID }}"
+        repeatInterval: "168h"
+      - scanType: trivy-image
+        name: "second-trivy-scan"
+        parameters:
+          - "{{ .ImageID }}"
+        repeatInterval: "168h"
+```
+➡️  [Reference: #1447](https://github.com/secureCodeBox/secureCodeBox/pull/1447)
